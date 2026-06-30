@@ -1,5 +1,10 @@
 import type { User } from "@financial-healthcheck/shared";
 import {
+  clearStoredUser,
+  loadUser,
+  saveUser,
+} from "@/lib/user-storage";
+import {
   createContext,
   useCallback,
   useContext,
@@ -21,13 +26,20 @@ interface UserProviderProps {
 }
 
 export function UserProvider({ children }: UserProviderProps) {
-  const [user, setUserState] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(() => loadUser());
 
   const setUser = useCallback((name: string) => {
-    setUserState({ name });
+    const nextUser: User = {
+      id: crypto.randomUUID(),
+      name,
+    };
+
+    saveUser(nextUser);
+    setUserState(nextUser);
   }, []);
 
   const clearUser = useCallback(() => {
+    clearStoredUser();
     setUserState(null);
   }, []);
 

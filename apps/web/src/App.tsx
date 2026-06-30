@@ -1,9 +1,9 @@
 import { useUser } from "@/contexts/UserProvider";
-import { HomePage } from "@/components/HomePage";
+import { Dashboard } from "@/components/Dashboard";
 import { OnboardingView } from "@/components/OnboardingView";
 
 export function App() {
   const { user } = useUser();
 
-  return user ? <HomePage /> : <OnboardingView />;
+  return user ? <Dashboard /> : <OnboardingView />;
 }

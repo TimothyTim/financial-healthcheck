@@ -1,0 +1,158 @@
+---
+description: Structure and conventions for React components in apps/web — composition, React Query, shadcn, and tests
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Front-End Component Structure (Web)
+
+Applies to [`apps/web`](apps/web) only — Vite, React, TypeScript, Tailwind v4, shadcn/ui, React Query, Vitest.
+
+Keep [`App.tsx`](apps/web/src/App.tsx) thin: gate views (e.g. onboarding vs dashboard) and compose feature components — no business logic or fetch code in the app shell.
+
+## Directory layout
+
+```
+apps/web/src/
+├── App.tsx                 # View switching / route shell
+├── main.tsx                # Providers (QueryClient, UserProvider)
+├── components/
+│   ├── ui/                 # shadcn primitives only (Button, Card, Table, …)
+│   ├── Dashboard.tsx       # Feature / page-level components
+│   └── OnboardingView.tsx
+├── contexts/               # React context providers (e.g. UserProvider)
+├── lib/
+│   ├── api.ts              # fetch wrappers → /api (via Vite proxy)
+│   ├── format-money.ts     # Display helpers
+│   ├── user-storage.ts     # Client persistence (localStorage)
+│   └── utils.ts            # cn() and shared utilities
+├── pages/                  # Optional page wrappers (wire from App when added)
+└── test/
+    ├── setup.ts
+    └── test-utils.tsx      # renderWithProviders
+```
+
+| Location | Use for |
+|----------|---------|
+| `components/` | Feature and page-level UI (`Dashboard`, `OnboardingView`) |
+| `components/ui/` | Shared shadcn primitives — never feature-specific logic |
+| `contexts/` | Cross-cutting client state (`useUser`, providers) |
+| `lib/` | API clients, formatters, storage — no JSX |
+| `packages/shared` | Domain types (`User`, `Statement`, …) via `@financial-healthcheck/shared` |
+
+Import shared domain types from `@financial-healthcheck/shared`. Do not duplicate API shapes in component-local types unless they are view-only props.
+
+## Component files
+
+Co-locate tests next to the component: `Dashboard.tsx` + `Dashboard.test.tsx`.
+
+For small features, a single file per component is fine. When a component grows (multiple sub-views, hooks, schemas), promote to a folder:
+
+```
+components/
+  Dashboard/
+    Dashboard.tsx
+    Dashboard.test.tsx
+    components/
+      StatementTable/
+        StatementTable.tsx
+        StatementTable.test.tsx
+```
+
+- **Nest** sub-components under the parent's `components/` when only that parent uses them.
+- **Promote** to `components/<Name>/` at the top level when a second parent imports them.
+- Do not put feature components inside `components/ui/`.
+
+## Server state (React Query)
+
+Use TanStack React Query for all API data. Do not use `useEffect` + `useState` for fetching.
+
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| API client | `lib/api.ts` | `fetch` calls; use `STATEMENT_API_ROUTES` / types from shared |
+| Components | `components/*.tsx` | `useQuery` / `useMutation`; render loading, error, empty, data |
+| App root | `main.tsx` | `QueryClientProvider` |
+
+```tsx
+// ❌ BAD — fetch in useEffect
+useEffect(() => {
+  fetchStatements(userId).then(setStatements);
+}, [userId]);
+
+// ✅ GOOD — React Query in the component
+const { data, isLoading, isError, refetch } = useQuery({
+  queryKey: ["statements", user.id],
+  queryFn: () => fetchStatements(user.id),
+  enabled: !!user,
+});
+```
+
+- Invalidate or refetch via query keys after mutations — do not manually sync duplicate state.
+- Handle all four UI states: loading, error (with retry), empty, and success.
+
+## Client state
+
+- **User session** — `contexts/UserProvider` + `lib/user-storage.ts` (localStorage, includes `user.id` for API calls).
+- **Server data** — React Query only; never store API responses in context.
+
+## Forms
+
+- Simple single-field flows (e.g. onboarding name) may use controlled `useState`.
+- Multi-field forms: prefer **react-hook-form** + **Zod** with a colocated `*.schema.ts` when added to the project.
+- Validate API request bodies on the server; mirror rules in client schemas when using forms.
+
+## Styling
+
+- Use Tailwind utility classes and shadcn components from `components/ui/`.
+- Use theme tokens from [`index.css`](apps/web/src/index.css) (`bg-background`, `text-foreground`, `text-primary`, …) — warm palette is already configured.
+- Use `cn()` from `lib/utils.ts` for conditional class names.
+
+## Shared UI
+
+Compose from `components/ui/` (Button, Card, Table, Input, Badge). Add new primitives via the shadcn CLI into `components/ui/` — do not copy primitive markup into feature components.
+
+Use TanStack Table for tabular data (see `Dashboard` statements table).
+
+## Testing
+
+| Type | Location | Approach |
+|------|----------|----------|
+| Unit | `components/*.test.tsx` | Vitest + React Testing Library |
+| E2E | `tests/e2e/` | Playwright |
+
+- Use `renderWithProviders` from [`test/test-utils.tsx`](apps/web/src/test/test-utils.tsx) — wraps `QueryClientProvider` and `UserProvider`.
+- Mock `globalThis.fetch` for API-dependent component tests.
+- Seed `localStorage` via `USER_STORAGE_KEY` when tests need a logged-in user.
+- Re-export RTL helpers from `test-utils` (`screen`, `waitFor`, `userEvent`).
+
+```bash
+pnpm --filter @financial-healthcheck/web test:unit
+pnpm test:e2e
+```
+
+## When to split
+
+Extract a sub-component when:
+
+- JSX is reused or the parent exceeds ~100 lines
+- A section has a clear responsibility (table, form, empty state, error card)
+- Logic can be tested via a pure helper in `lib/` (e.g. `format-money.ts`)
+
+Keep fetch hooks and query keys in the feature component until a dedicated `api/hooks/` layer is introduced.
+
+## Examples
+
+```tsx
+// ❌ BAD — monolithic App with fetch, table, and form
+export function App() {
+  const [statements, setStatements] = useState([]);
+  useEffect(() => { /* fetch */ }, []);
+  return (/* 150 lines */);
+}
+
+// ✅ GOOD — thin App, composed features
+export function App() {
+  const { user } = useUser();
+  return user ? <Dashboard /> : <OnboardingView />;
+}
+```

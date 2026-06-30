@@ -1,9 +1,17 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { USER_STORAGE_KEY } from "@/lib/user-storage";
 import { UserProvider, useUser } from "@/contexts/UserProvider";
 
 describe("UserProvider", () => {
-  it("defaults user to null", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("crypto", {
+      randomUUID: vi.fn(() => "generated-user-id"),
+    });
+  });
+
+  it("defaults user to null when localStorage is empty", () => {
     const { result } = renderHook(() => useUser(), {
       wrapper: UserProvider,
     });
@@ -11,7 +19,20 @@ describe("UserProvider", () => {
     expect(result.current.user).toBeNull();
   });
 
-  it("setUser stores the name in memory", () => {
+  it("loads user from localStorage on mount", () => {
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify({ id: "stored-id", name: "Alex" }),
+    );
+
+    const { result } = renderHook(() => useUser(), {
+      wrapper: UserProvider,
+    });
+
+    expect(result.current.user).toEqual({ id: "stored-id", name: "Alex" });
+  });
+
+  it("setUser stores id and name in state and localStorage", () => {
     const { result } = renderHook(() => useUser(), {
       wrapper: UserProvider,
     });
@@ -20,10 +41,16 @@ describe("UserProvider", () => {
       result.current.setUser("Alex");
     });
 
-    expect(result.current.user).toEqual({ name: "Alex" });
+    expect(result.current.user).toEqual({
+      id: "generated-user-id",
+      name: "Alex",
+    });
+    expect(localStorage.getItem(USER_STORAGE_KEY)).toBe(
+      JSON.stringify({ id: "generated-user-id", name: "Alex" }),
+    );
   });
 
-  it("clearUser resets user to null", () => {
+  it("clearUser resets user to null and removes localStorage entry", () => {
     const { result } = renderHook(() => useUser(), {
       wrapper: UserProvider,
     });
@@ -37,6 +64,7 @@ describe("UserProvider", () => {
     });
 
     expect(result.current.user).toBeNull();
+    expect(localStorage.getItem(USER_STORAGE_KEY)).toBeNull();
   });
 
   it("throws when useUser is used outside UserProvider", () => {
