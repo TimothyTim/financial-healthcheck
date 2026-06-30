@@ -211,3 +211,44 @@ describe("GET /api/statements", () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe("GET /api/statements/:id", () => {
+  const app = createApp();
+
+  it("returns a statement with summary by id", async () => {
+    const created = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-get-by-id",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const response = await request(app).get(
+      `/api/statements/${created.body.id}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: created.body.id,
+      userId: "user-get-by-id",
+      period: { month: 6, year: 2026 },
+      summary: {
+        status: "breathingRoom",
+        netPosition: { amount: 110_000 },
+      },
+    });
+    expect(response.body.summary.repaymentGuidance).toBeTruthy();
+    expect(response.body.summary.whyAmISeeingThis).toBeTruthy();
+  });
+
+  it("returns 404 when the statement does not exist", async () => {
+    const response = await request(app).get(
+      "/api/statements/non-existent-id",
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Statement not found");
+  });
+});

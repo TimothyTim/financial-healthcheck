@@ -31,6 +31,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const createdStatementResponse = {
+  id: "stmt-new",
+  userId: "user-test",
+  period: { month: 6, year: 2026 },
+  payments: [],
+  summary: {
+    totalIncome: { amount: 200_000 },
+    totalExpenses: { amount: 80_000 },
+    totalDebtRepayments: { amount: 10_000 },
+    netPosition: { amount: 110_000 },
+    status: "breathingRoom",
+    repaymentGuidance:
+      "You may have room to maintain or modestly increase repayments — confirm amounts with your creditors first.",
+    whyAmISeeingThis:
+      "Your monthly net position is £1,100.00 (at least £300 left after essentials and debt payments), so we class this as breathing room.",
+  },
+  createdAt: "2026-06-01T00:00:00.000Z",
+  updatedAt: "2026-06-01T00:00:00.000Z",
+};
+
+const sampleStatementResponse = {
+  ...createdStatementResponse,
+  id: "stmt-sample",
+  summary: {
+    totalIncome: { amount: 250_000 },
+    totalExpenses: { amount: 105_000 },
+    totalDebtRepayments: { amount: 20_000 },
+    netPosition: { amount: 125_000 },
+    status: "breathingRoom",
+    repaymentGuidance:
+      "You may have room to maintain or modestly increase repayments — confirm amounts with your creditors first.",
+    whyAmISeeingThis:
+      "Your monthly net position is £1,250.00 (at least £300 left after essentials and debt payments), so we class this as breathing room.",
+  },
+};
+
 describe("StatementNewPage", () => {
   beforeEach(() => {
     seedUser();
@@ -68,25 +104,14 @@ describe("StatementNewPage", () => {
   });
 
   it("submits the statement and navigates to the detail page", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          id: "stmt-new",
-          userId: "user-test",
-          period: { month: 6, year: 2026 },
-          payments: [],
-          summary: {
-            totalIncome: { amount: 200_000 },
-            totalExpenses: { amount: 80_000 },
-            totalDebtRepayments: { amount: 10_000 },
-            netPosition: { amount: 110_000 },
-          },
-          createdAt: "2026-06-01T00:00:00.000Z",
-          updatedAt: "2026-06-01T00:00:00.000Z",
-        }),
-        { status: 201 },
-      ),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(createdStatementResponse), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(createdStatementResponse), { status: 200 }),
+      );
 
     const user = userEvent.setup();
     renderStatementNewPageWithRoutes();
@@ -102,7 +127,7 @@ describe("StatementNewPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "Statement" }),
+        screen.getByRole("heading", { name: "June 2026" }),
       ).toBeInTheDocument();
     });
 
@@ -135,25 +160,14 @@ describe("StatementNewPage", () => {
   });
 
   it("submits sample data when Use sample data is clicked", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          id: "stmt-sample",
-          userId: "user-test",
-          period: { month: 6, year: 2026 },
-          payments: [],
-          summary: {
-            totalIncome: { amount: 250_000 },
-            totalExpenses: { amount: 105_000 },
-            totalDebtRepayments: { amount: 20_000 },
-            netPosition: { amount: 125_000 },
-          },
-          createdAt: "2026-06-01T00:00:00.000Z",
-          updatedAt: "2026-06-01T00:00:00.000Z",
-        }),
-        { status: 201 },
-      ),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(sampleStatementResponse), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(sampleStatementResponse), { status: 200 }),
+      );
 
     const user = userEvent.setup();
     renderStatementNewPageWithRoutes();
@@ -162,7 +176,7 @@ describe("StatementNewPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "Statement" }),
+        screen.getByRole("heading", { name: "June 2026" }),
       ).toBeInTheDocument();
     });
 

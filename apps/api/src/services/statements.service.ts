@@ -1,4 +1,5 @@
 import type {
+  CreatePaymentInput,
   CreateStatementInput,
   Payment,
   Statement,
@@ -56,6 +57,13 @@ function enrichSummary(payments: Payment[]): StatementSummary {
   };
 }
 
+function toStatementWithSummary(statement: Statement): StatementWithSummary {
+  return {
+    ...statement,
+    summary: enrichSummary(statement.payments),
+  };
+}
+
 export function createStatementsService() {
   const statements = new Map<string, Statement>();
   const periodIndex = new Map<string, string>();
@@ -86,19 +94,23 @@ export function createStatementsService() {
     statements.set(id, statement);
     periodIndex.set(key, id);
 
-    return {
-      ...statement,
-      summary: enrichSummary(statement.payments),
-    };
+    return toStatementWithSummary(statement);
+  }
+
+  function getStatementById(id: string): StatementWithSummary | undefined {
+    const statement = statements.get(id);
+
+    if (!statement) {
+      return undefined;
+    }
+
+    return toStatementWithSummary(statement);
   }
 
   function listStatementsByUserId(userId: string): StatementWithSummary[] {
     return [...statements.values()]
       .filter((statement) => statement.userId === userId)
-      .map((statement) => ({
-        ...statement,
-        summary: enrichSummary(statement.payments),
-      }))
+      .map(toStatementWithSummary)
       .sort((a, b) => {
         if (a.period.year !== b.period.year) {
           return b.period.year - a.period.year;
@@ -108,7 +120,7 @@ export function createStatementsService() {
       });
   }
 
-  return { createStatement, listStatementsByUserId };
+  return { createStatement, getStatementById, listStatementsByUserId };
 }
 
 export const statementsService = createStatementsService();

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import {
   createStatementSchema,
   listStatementsQuerySchema,
+  statementIdParamsSchema,
 } from "../lib/validation.js";
 import {
   DuplicateStatementError,
@@ -41,4 +42,22 @@ statementsRouter.post("/", (req, res) => {
 
     throw error;
   }
+});
+
+statementsRouter.get("/:id", (req, res) => {
+  const parsed = statementIdParamsSchema.safeParse(req.params);
+
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const statement = statementsService.getStatementById(parsed.data.id);
+
+  if (!statement) {
+    res.status(404).json({ error: "Statement not found" });
+    return;
+  }
+
+  res.status(200).json(statement);
 });

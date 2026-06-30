@@ -178,4 +178,25 @@ describe("statements service", () => {
     expect(result.payments[0]?.date).toBe("2026-01-15");
     expect(result.payments[1]?.date).toBe("2026-01-01");
   });
+
+  it("returns a statement by id with enriched summary", () => {
+    const service = createStatementsService();
+
+    const created = service.createStatement({
+      userId: "user-get",
+      month: 6,
+      year: 2026,
+      payments: samplePayments,
+    });
+
+    const result = service.getStatementById(created.id);
+
+    expect(result).toEqual(created);
+  });
+
+  it("returns undefined for an unknown statement id", () => {
+    const service = createStatementsService();
+
+    expect(service.getStatementById("missing-id")).toBeUndefined();
+  });
 });

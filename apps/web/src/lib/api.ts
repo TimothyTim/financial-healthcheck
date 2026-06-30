@@ -27,6 +27,22 @@ export async function fetchStatements(
   return response.json() as Promise<StatementWithSummary[]>;
 }
 
+export async function fetchStatement(
+  id: string,
+): Promise<StatementWithSummary> {
+  const response = await fetch(STATEMENT_API_ROUTES.statementById(id));
+
+  if (response.status === 404) {
+    throw new Error("Statement not found");
+  }
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch statement");
+  }
+
+  return response.json() as Promise<StatementWithSummary>;
+}
+
 export async function createStatement(
   input: CreateStatementInput,
 ): Promise<StatementWithSummary> {

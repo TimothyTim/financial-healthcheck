@@ -32,3 +32,7 @@ export const createStatementSchema = z
 export const listStatementsQuerySchema = z.object({
   userId: z.string().min(1),
 });
+
+export const statementIdParamsSchema = z.object({
+  id: z.string().min(1),
+});

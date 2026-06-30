@@ -26,7 +26,7 @@ Authentication, production persistence, PDF export, secure sharing, complex cate
 
 ## What I would do next
 
-Historical charts, creditor policy rules, vulnerability indicators, customer review flow, secure backend storage, audit logs.
+Align the UI with a slightly more themed and friendly environment. It is quite basic right now.
 
 ## AI usage
 

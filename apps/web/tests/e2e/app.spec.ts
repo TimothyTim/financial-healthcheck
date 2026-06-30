@@ -67,5 +67,5 @@ test("new statement form submits and redirects to statement detail", async ({
   await page.getByRole("button", { name: "Submit statement" }).click();
 
   await expect(page).toHaveURL(/\/statement\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: "Statement" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "June 2026" })).toBeVisible();
 });
