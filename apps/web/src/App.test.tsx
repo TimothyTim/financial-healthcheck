@@ -25,7 +25,9 @@ describe("App", () => {
     expect(screen.queryByText("What shall we call you?")).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Start financial health check" }),
+      ).toBeInTheDocument();
     });
   });
 });

@@ -50,11 +50,21 @@ export interface Statement {
   updatedAt: string;
 }
 
+/** Request body for creating a payment on a new statement. */
+export interface CreatePaymentInput {
+  type: PaymentType;
+  label: string;
+  amount: Money;
+  /** ISO date (YYYY-MM-DD). Defaults to the first day of the statement period. */
+  date?: string;
+}
+
 /** Request body for creating a new statement. */
 export interface CreateStatementInput {
   userId: string;
   month: number;
   year: number;
+  payments: CreatePaymentInput[];
 }
 
 /** Query parameters for listing statements for a user. */
@@ -77,4 +87,5 @@ export interface StatementWithSummary extends Statement {
 
 export const STATEMENT_API_ROUTES = {
   statements: "/api/statements",
+  statementById: (id: string) => `/api/statements/${id}`,
 } as const;

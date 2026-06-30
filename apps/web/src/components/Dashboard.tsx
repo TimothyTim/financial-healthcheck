@@ -1,5 +1,6 @@
 import type { StatementPeriod } from "@financial-healthcheck/shared";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FullPageLoader } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -41,6 +43,7 @@ function formatPeriod(period: StatementPeriod): string {
 
 export function Dashboard() {
   const { user } = useUser();
+  const navigate = useNavigate();
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["statements", user?.id],
@@ -52,6 +55,24 @@ export function Dashboard() {
     return null;
   }
 
+  if (isLoading) {
+    return <FullPageLoader />;
+  }
+
+  if (data && data.length === 0) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
+        <Button onClick={() => navigate("/statement/new")}>
+          Start financial health check
+        </Button>
+        <p className="mt-4 max-w-md text-center text-sm text-muted-foreground">
+          This will help you better understand your financial health and manage
+          your way out of debt.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-4xl px-6 py-8">
@@ -61,14 +82,6 @@ export function Dashboard() {
             Hello, {user.name}
           </p>
         </header>
-
-        {isLoading && (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              Loading statements…
-            </CardContent>
-          </Card>
-        )}
 
         {isError && (
           <Card>
@@ -82,14 +95,6 @@ export function Dashboard() {
               <Button onClick={() => refetch()} disabled={isFetching}>
                 {isFetching ? "Retrying…" : "Try again"}
               </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {data && data.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No statements yet
             </CardContent>
           </Card>
         )}

@@ -6,6 +6,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactElement, type ReactNode } from "react";
+import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { UserProvider } from "@/contexts/UserProvider";
 
 function createTestQueryClient() {
@@ -14,31 +15,45 @@ function createTestQueryClient() {
       queries: {
         retry: false,
       },
+      mutations: {
+        retry: false,
+      },
     },
   });
 }
 
 interface ProvidersProps {
   children: ReactNode;
+  routerProps?: MemoryRouterProps;
 }
 
-function Providers({ children }: ProvidersProps) {
+function Providers({ children, routerProps }: ProvidersProps) {
   const queryClient = createTestQueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <UserProvider>{children}</UserProvider>
-    </QueryClientProvider>
+    <MemoryRouter {...routerProps}>
+      <QueryClientProvider client={queryClient}>
+        <UserProvider>{children}</UserProvider>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
+}
+
+interface RenderWithProvidersOptions extends Omit<RenderOptions, "wrapper"> {
+  routerProps?: MemoryRouterProps;
 }
 
 function renderWithProviders(
   ui: ReactElement,
-  options?: Omit<RenderOptions, "wrapper">,
+  options?: RenderWithProvidersOptions,
 ): RenderResult {
+  const { routerProps, ...renderOptions } = options ?? {};
+
   return render(ui, {
-    wrapper: Providers,
-    ...options,
+    wrapper: ({ children }) => (
+      <Providers routerProps={routerProps}>{children}</Providers>
+    ),
+    ...renderOptions,
   });
 }
 

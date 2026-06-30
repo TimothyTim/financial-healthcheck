@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Route, Routes } from "react-router-dom";
 import { Dashboard } from "@/components/Dashboard";
+import { StatementNewPage } from "@/pages/StatementNewPage/StatementNewPage";
 import { USER_STORAGE_KEY } from "@/lib/user-storage";
-import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
+import {
+  renderWithProviders,
+  screen,
+  userEvent,
+  waitFor,
+} from "@/test/test-utils";
 
 const mockStatements = [
   {
@@ -27,6 +34,15 @@ function seedUser() {
   );
 }
 
+function renderDashboardWithRoutes() {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/statement/new" element={<StatementNewPage />} />
+    </Routes>,
+  );
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -36,19 +52,41 @@ describe("Dashboard", () => {
     seedUser();
   });
 
-  it("renders the dashboard heading and greeting", async () => {
+  it("shows a full-page empty state when there are no statements", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify([]), { status: 200 }),
     );
 
-    renderWithProviders(<Dashboard />);
-
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText("Hello, Alex")).toBeInTheDocument();
+    renderDashboardWithRoutes();
 
     await waitFor(() => {
-      expect(screen.getByText("No statements yet")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Start financial health check" }),
+      ).toBeInTheDocument();
     });
+
+    expect(
+      screen.queryByRole("heading", { name: "Dashboard" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Hello, Alex")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This will help you better understand your financial health and manage your way out of debt.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a full-page loader while statements are loading", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    renderDashboardWithRoutes();
+
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Dashboard" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows statement rows from the API", async () => {
@@ -56,25 +94,38 @@ describe("Dashboard", () => {
       new Response(JSON.stringify(mockStatements), { status: 200 }),
     );
 
-    renderWithProviders(<Dashboard />);
+    renderDashboardWithRoutes();
 
     await waitFor(() => {
       expect(screen.getByText("June 2026")).toBeInTheDocument();
     });
 
+    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByText("Hello, Alex")).toBeInTheDocument();
     expect(screen.getByText("£500.00")).toBeInTheDocument();
   });
 
-  it("shows an empty state when the API returns no statements", async () => {
+  it("navigates to the new statement page when the CTA is clicked", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify([]), { status: 200 }),
     );
 
-    renderWithProviders(<Dashboard />);
+    const user = userEvent.setup();
+    renderDashboardWithRoutes();
 
     await waitFor(() => {
-      expect(screen.getByText("No statements yet")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Start financial health check" }),
+      ).toBeInTheDocument();
     });
+
+    await user.click(
+      screen.getByRole("button", { name: "Start financial health check" }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Add a new financial statement" }),
+    ).toBeInTheDocument();
   });
 
   it("shows an error state when the API request fails", async () => {
@@ -82,7 +133,7 @@ describe("Dashboard", () => {
       new Response(null, { status: 500 }),
     );
 
-    renderWithProviders(<Dashboard />);
+    renderDashboardWithRoutes();
 
     await waitFor(() => {
       expect(screen.getByText("Something went wrong")).toBeInTheDocument();

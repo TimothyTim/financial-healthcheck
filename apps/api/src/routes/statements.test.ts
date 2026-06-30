@@ -2,25 +2,36 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 
+const samplePayments = [
+  { type: "income", label: "Salary", amount: { amount: 200_000 } },
+  { type: "expense", label: "Rent", amount: { amount: 80_000 } },
+  { type: "debtRepayment", label: "Credit card", amount: { amount: 10_000 } },
+];
+
 describe("POST /api/statements", () => {
   const app = createApp();
 
-  it("creates a statement with userId, period, empty payments, and zero summary", async () => {
+  it("creates a statement with payments and computed summary", async () => {
     const response = await request(app)
       .post("/api/statements")
-      .send({ userId: "user-create", month: 6, year: 2026 });
+      .send({ userId: "user-create", month: 6, year: 2026, payments: samplePayments });
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
       userId: "user-create",
       period: { month: 6, year: 2026 },
-      payments: [],
       summary: {
-        totalIncome: { amount: 0 },
-        totalExpenses: { amount: 0 },
-        totalDebtRepayments: { amount: 0 },
-        netPosition: { amount: 0 },
+        totalIncome: { amount: 200_000 },
+        totalExpenses: { amount: 80_000 },
+        totalDebtRepayments: { amount: 10_000 },
+        netPosition: { amount: 110_000 },
       },
+    });
+    expect(response.body.payments).toHaveLength(3);
+    expect(response.body.payments[0]).toMatchObject({
+      type: "income",
+      label: "Salary",
+      date: "2026-06-01",
     });
     expect(response.body.id).toBeTruthy();
     expect(response.body.createdAt).toBeTruthy();
@@ -28,7 +39,12 @@ describe("POST /api/statements", () => {
   });
 
   it("returns 409 for duplicate userId + period", async () => {
-    const payload = { userId: "user-dup", month: 7, year: 2026 };
+    const payload = {
+      userId: "user-dup",
+      month: 7,
+      year: 2026,
+      payments: samplePayments,
+    };
 
     await request(app).post("/api/statements").send(payload);
 
@@ -41,7 +57,12 @@ describe("POST /api/statements", () => {
   it("allows the same period for different users", async () => {
     const response = await request(app)
       .post("/api/statements")
-      .send({ userId: "user-b", month: 8, year: 2026 });
+      .send({
+        userId: "user-b",
+        month: 8,
+        year: 2026,
+        payments: samplePayments,
+      });
 
     expect(response.status).toBe(201);
     expect(response.body.userId).toBe("user-b");
@@ -50,7 +71,7 @@ describe("POST /api/statements", () => {
   it("returns 400 when userId is missing", async () => {
     const response = await request(app)
       .post("/api/statements")
-      .send({ month: 6, year: 2026 });
+      .send({ month: 6, year: 2026, payments: samplePayments });
 
     expect(response.status).toBe(400);
   });
@@ -58,7 +79,36 @@ describe("POST /api/statements", () => {
   it("returns 400 for invalid month", async () => {
     const response = await request(app)
       .post("/api/statements")
-      .send({ userId: "user-invalid", month: 13, year: 2026 });
+      .send({
+        userId: "user-invalid",
+        month: 13,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when payments are missing", async () => {
+    const response = await request(app)
+      .post("/api/statements")
+      .send({ userId: "user-no-payments", month: 6, year: 2026 });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when a required payment type is missing", async () => {
+    const response = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-missing-type",
+        month: 6,
+        year: 2026,
+        payments: [
+          { type: "income", label: "Salary", amount: { amount: 100 } },
+          { type: "expense", label: "Rent", amount: { amount: 50 } },
+        ],
+      });
 
     expect(response.status).toBe(400);
   });
@@ -79,13 +129,28 @@ describe("GET /api/statements", () => {
   it("returns all statements for the user sorted by newest period first", async () => {
     await request(app)
       .post("/api/statements")
-      .send({ userId: "user-list", month: 3, year: 2025 });
+      .send({
+        userId: "user-list",
+        month: 3,
+        year: 2025,
+        payments: samplePayments,
+      });
     await request(app)
       .post("/api/statements")
-      .send({ userId: "user-list", month: 12, year: 2026 });
+      .send({
+        userId: "user-list",
+        month: 12,
+        year: 2026,
+        payments: samplePayments,
+      });
     await request(app)
       .post("/api/statements")
-      .send({ userId: "user-list", month: 6, year: 2026 });
+      .send({
+        userId: "user-list",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
 
     const response = await request(app)
       .get("/api/statements")
@@ -109,10 +174,20 @@ describe("GET /api/statements", () => {
   it("does not include statements from other users", async () => {
     await request(app)
       .post("/api/statements")
-      .send({ userId: "user-list-a", month: 1, year: 2026 });
+      .send({
+        userId: "user-list-a",
+        month: 1,
+        year: 2026,
+        payments: samplePayments,
+      });
     await request(app)
       .post("/api/statements")
-      .send({ userId: "user-list-b", month: 2, year: 2026 });
+      .send({
+        userId: "user-list-b",
+        month: 2,
+        year: 2026,
+        payments: samplePayments,
+      });
 
     const response = await request(app)
       .get("/api/statements")

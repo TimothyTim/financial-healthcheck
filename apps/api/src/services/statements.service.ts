@@ -1,5 +1,7 @@
 import type {
+  CreatePaymentInput,
   CreateStatementInput,
+  Payment,
   Statement,
   StatementWithSummary,
 } from "@financial-healthcheck/shared";
@@ -18,6 +20,28 @@ function periodKey(userId: string, month: number, year: number): string {
   return `${userId}:${year}:${month}`;
 }
 
+function defaultPaymentDate(month: number, year: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+function createPayment(
+  statementId: string,
+  input: CreatePaymentInput,
+  month: number,
+  year: number,
+  createdAt: string,
+): Payment {
+  return {
+    id: crypto.randomUUID(),
+    statementId,
+    type: input.type,
+    amount: input.amount,
+    label: input.label,
+    date: input.date ?? defaultPaymentDate(month, year),
+    createdAt,
+  };
+}
+
 export function createStatementsService() {
   const statements = new Map<string, Statement>();
   const periodIndex = new Map<string, string>();
@@ -32,11 +56,15 @@ export function createStatementsService() {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
 
+    const payments = input.payments.map((payment) =>
+      createPayment(id, payment, input.month, input.year, now),
+    );
+
     const statement: Statement = {
       id,
       userId: input.userId,
       period: { month: input.month, year: input.year },
-      payments: [],
+      payments,
       createdAt: now,
       updatedAt: now,
     };
