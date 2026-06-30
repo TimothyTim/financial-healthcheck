@@ -1,0 +1,47 @@
+---
+description: Feature Development Workflow — implement features incrementally through shared types, API, components, routes, and tests
+alwaysApply: true
+---
+
+# Feature Development Workflow
+
+Implement features **in this order**. Complete each step before starting the next.
+
+## 1. Schema type definitions
+
+Add types in `packages/shared/src/types/`. Export from `packages/shared/src/index.ts`. Rebuild: `pnpm --filter @financial-healthcheck/shared build`.
+
+## 2. API service business logic, routes, and tests
+
+| Concern | Location |
+|---------|----------|
+| Business logic | `apps/api/src/services/<feature>.service.ts` |
+| Routes | `apps/api/src/routes/<feature>.ts` — mount in `app.ts` |
+| Tests | `*.test.ts` alongside (Vitest + supertest) |
+
+## 3. Frontend components and unit testing
+
+- Components: `apps/web/src/components/`
+- API helpers: `apps/web/src/lib/api.ts`
+- Unit tests: `apps/web/src/**/*.test.tsx` using `renderWithProviders` from `src/test/test-utils.tsx`
+- Run: `pnpm --filter @financial-healthcheck/web test:unit`
+
+## 4. Frontend routes
+
+- Pages: `apps/web/src/pages/` — wire in `App.tsx`
+- Use React Query for server state; shadcn + TanStack Table for UI
+
+## 5. Testing
+
+| Layer | Location | Runner |
+|-------|----------|--------|
+| API | `apps/api/src/**/*.test.ts` | Vitest + supertest |
+| Client unit | `apps/web/src/**/*.test.tsx` | Vitest + React Testing Library |
+| Client E2E | `apps/web/tests/e2e/` | Playwright |
+
+```bash
+pnpm test          # unit tests
+pnpm test:e2e      # Playwright E2E
+```
+
+Before finishing: shared types built, API tests pass, component unit tests pass, E2E covers the primary user flow.
