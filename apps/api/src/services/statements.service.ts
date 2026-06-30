@@ -1,9 +1,13 @@
 import type {
-  CreatePaymentInput,
   CreateStatementInput,
   Payment,
   Statement,
+  StatementSummary,
   StatementWithSummary,
+} from "@financial-healthcheck/shared";
+import {
+  computeRepaymentGuidance,
+  computeWhyAmISeeingThis,
 } from "@financial-healthcheck/shared";
 import { computeSummary } from "../lib/summary.js";
 
@@ -42,6 +46,16 @@ function createPayment(
   };
 }
 
+function enrichSummary(payments: Payment[]): StatementSummary {
+  const base = computeSummary(payments);
+
+  return {
+    ...base,
+    repaymentGuidance: computeRepaymentGuidance(base.status),
+    whyAmISeeingThis: computeWhyAmISeeingThis(base),
+  };
+}
+
 export function createStatementsService() {
   const statements = new Map<string, Statement>();
   const periodIndex = new Map<string, string>();
@@ -74,7 +88,7 @@ export function createStatementsService() {
 
     return {
       ...statement,
-      summary: computeSummary(statement.payments),
+      summary: enrichSummary(statement.payments),
     };
   }
 
@@ -83,7 +97,7 @@ export function createStatementsService() {
       .filter((statement) => statement.userId === userId)
       .map((statement) => ({
         ...statement,
-        summary: computeSummary(statement.payments),
+        summary: enrichSummary(statement.payments),
       }))
       .sort((a, b) => {
         if (a.period.year !== b.period.year) {

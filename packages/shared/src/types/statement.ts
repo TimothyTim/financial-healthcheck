@@ -78,7 +78,27 @@ export interface StatementSummary {
   totalExpenses: Money;
   totalDebtRepayments: Money;
   netPosition: Money;
+  /** Derived from net position and total income — not persisted. */
+  status: StatementStatus;
+  /** Suggestive repayment guidance derived from status — not persisted. */
+  repaymentGuidance: string;
+  /** Plain-language explanation of why this status was assigned — not persisted. */
+  whyAmISeeingThis: string;
 }
+
+/** Summary totals and status before client-facing guidance enrichment. */
+export type StatementSummaryBase = Omit<
+  StatementSummary,
+  "repaymentGuidance" | "whyAmISeeingThis"
+>;
+
+/** Financial health band derived from monthly net position. */
+export type StatementStatus =
+  | "breathingRoom"
+  | "tight"
+  | "atRisk"
+  | "deficit"
+  | "needsReview";
 
 /** Statement returned from the API with computed summary. */
 export interface StatementWithSummary extends Statement {

@@ -25,6 +25,7 @@ describe("POST /api/statements", () => {
         totalExpenses: { amount: 80_000 },
         totalDebtRepayments: { amount: 10_000 },
         netPosition: { amount: 110_000 },
+        status: "breathingRoom",
       },
     });
     expect(response.body.payments).toHaveLength(3);
@@ -36,6 +37,12 @@ describe("POST /api/statements", () => {
     expect(response.body.id).toBeTruthy();
     expect(response.body.createdAt).toBeTruthy();
     expect(response.body.updatedAt).toBeTruthy();
+    expect(response.body.summary.repaymentGuidance).toBe(
+      "You may have room to maintain or modestly increase repayments — confirm amounts with your creditors first.",
+    );
+    expect(response.body.summary.whyAmISeeingThis).toBe(
+      "Your monthly net position is £1,100.00 (at least £300 left after essentials and debt payments), so we class this as breathing room.",
+    );
   });
 
   it("returns 409 for duplicate userId + period", async () => {

@@ -14,6 +14,11 @@ const samplePayments = [
   },
 ];
 
+const breathingRoomGuidance =
+  "You may have room to maintain or modestly increase repayments — confirm amounts with your creditors first.";
+const breathingRoomExplanation =
+  "Your monthly net position is £1,100.00 (at least £300 left after essentials and debt payments), so we class this as breathing room.";
+
 describe("statements service", () => {
   it("creates a statement with payments and computed summary", () => {
     const service = createStatementsService();
@@ -39,6 +44,9 @@ describe("statements service", () => {
       totalExpenses: { amount: 80_000 },
       totalDebtRepayments: { amount: 10_000 },
       netPosition: { amount: 110_000 },
+      status: "breathingRoom",
+      repaymentGuidance: breathingRoomGuidance,
+      whyAmISeeingThis: breathingRoomExplanation,
     });
     expect(result.id).toBeTruthy();
     expect(result.createdAt).toBeTruthy();

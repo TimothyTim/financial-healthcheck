@@ -1,8 +1,9 @@
-import type { Payment, StatementSummary } from "@financial-healthcheck/shared";
+import type { Payment, StatementSummaryBase } from "@financial-healthcheck/shared";
+import { computeStatementStatus } from "@financial-healthcheck/shared";
 
 const zeroMoney = { amount: 0 };
 
-export function computeSummary(payments: Payment[]): StatementSummary {
+export function computeSummary(payments: Payment[]): StatementSummaryBase {
   let totalIncome = 0;
   let totalExpenses = 0;
   let totalDebtRepayments = 0;
@@ -28,6 +29,10 @@ export function computeSummary(payments: Payment[]): StatementSummary {
     totalExpenses: { amount: totalExpenses },
     totalDebtRepayments: { amount: totalDebtRepayments },
     netPosition: { amount: netPosition },
+    status: computeStatementStatus(
+      { amount: netPosition },
+      { amount: totalIncome },
+    ),
   };
 }
 
