@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { App } from "@/App";
-import { renderWithProviders } from "@/test/test-utils";
+import { renderWithProviders, screen } from "@/test/test-utils";
 
 describe("App", () => {
-  it("renders an empty shell", () => {
-    const { container } = renderWithProviders(<App />);
+  it("shows onboarding when user is not set", () => {
+    renderWithProviders(<App />);
 
-    expect(container.querySelector("main")).toBeInTheDocument();
-    expect(container.querySelector("main")?.childElementCount).toBe(0);
+    expect(screen.getByText("What shall we call you?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Your name")).toBeInTheDocument();
   });
 });

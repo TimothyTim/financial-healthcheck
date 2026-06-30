@@ -1,7 +1,9 @@
+import { useUser } from "@/contexts/UserProvider";
+import { HomePage } from "@/components/HomePage";
+import { OnboardingView } from "@/components/OnboardingView";
+
 export function App() {
-  return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-4xl px-6 py-8" />
-    </div>
-  );
+  const { user } = useUser();
+
+  return user ? <HomePage /> : <OnboardingView />;
 }

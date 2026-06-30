@@ -6,6 +6,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactElement, type ReactNode } from "react";
+import { UserProvider } from "@/contexts/UserProvider";
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -25,7 +26,9 @@ function Providers({ children }: ProvidersProps) {
   const queryClient = createTestQueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <UserProvider>{children}</UserProvider>
+    </QueryClientProvider>
   );
 }
 
