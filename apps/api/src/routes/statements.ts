@@ -3,9 +3,11 @@ import {
   createStatementSchema,
   listStatementsQuerySchema,
   statementIdParamsSchema,
+  updateStatementSchema,
 } from "../lib/validation.js";
 import {
   DuplicateStatementError,
+  StatementNotFoundError,
   statementsService,
 } from "../services/statements.service.js";
 
@@ -60,4 +62,40 @@ statementsRouter.get("/:id", (req, res) => {
   }
 
   res.status(200).json(statement);
+});
+
+statementsRouter.patch("/:id", (req, res) => {
+  const paramsParsed = statementIdParamsSchema.safeParse(req.params);
+
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: paramsParsed.error.flatten() });
+    return;
+  }
+
+  const bodyParsed = updateStatementSchema.safeParse(req.body);
+
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: bodyParsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const statement = statementsService.updateStatement(
+      paramsParsed.data.id,
+      bodyParsed.data,
+    );
+    res.status(200).json(statement);
+  } catch (error) {
+    if (error instanceof StatementNotFoundError) {
+      res.status(404).json({ error: "Statement not found" });
+      return;
+    }
+
+    if (error instanceof DuplicateStatementError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+
+    throw error;
+  }
 });

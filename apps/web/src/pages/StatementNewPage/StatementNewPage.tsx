@@ -1,13 +1,31 @@
-import type { CreatePaymentInput, CreateStatementInput } from "@financial-healthcheck/shared";
+import type {
+  CreatePaymentInput,
+  CreateStatementInput,
+  UpdateStatementInput,
+} from "@financial-healthcheck/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { FullPageLoader } from "@/components/ui/spinner";
 import { useUser } from "@/contexts/UserProvider";
-import { CreateStatementError, createStatement } from "@/lib/api";
+import {
+  CreateStatementError,
+  UpdateStatementError,
+  createStatement,
+  fetchStatement,
+  updateStatement,
+} from "@/lib/api";
 import { PaymentGroup } from "./components/PaymentGroup/PaymentGroup";
 import {
   getDefaultStatementNewValues,
@@ -15,6 +33,7 @@ import {
   getYearOptions,
   monthOptions,
   statementNewSchema,
+  statementToFormValues,
   type StatementNewFormValues,
 } from "./statement-new.schema";
 
@@ -29,12 +48,10 @@ function toPaymentInput(
   }));
 }
 
-function toCreateStatementInput(
-  userId: string,
+function toUpdateStatementInput(
   values: StatementNewFormValues,
-): CreateStatementInput {
+): UpdateStatementInput {
   return {
-    userId,
     month: values.month,
     year: values.year,
     payments: [
@@ -45,23 +62,56 @@ function toCreateStatementInput(
   };
 }
 
+function toCreateStatementInput(
+  userId: string,
+  values: StatementNewFormValues,
+): CreateStatementInput {
+  return {
+    userId,
+    ...toUpdateStatementInput(values),
+  };
+}
+
 export function StatementNewPage() {
   const { user } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const statementId = searchParams.get("statementId");
+  const isEditMode = Boolean(statementId);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const {
+    data: existingStatement,
+    isLoading: isLoadingStatement,
+    isError: isStatementError,
+    error: statementError,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: ["statement", statementId],
+    queryFn: () => fetchStatement(statementId!),
+    enabled: isEditMode,
+  });
 
   const {
     control,
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<StatementNewFormValues>({
     resolver: zodResolver(statementNewSchema),
     defaultValues: getDefaultStatementNewValues(),
   });
 
-  const mutation = useMutation({
+  useEffect(() => {
+    if (existingStatement) {
+      reset(statementToFormValues(existingStatement));
+    }
+  }, [existingStatement, reset]);
+
+  const createMutation = useMutation({
     mutationFn: createStatement,
     onSuccess: (statement) => {
       if (user) {
@@ -82,8 +132,68 @@ export function StatementNewPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (values: StatementNewFormValues) =>
+      updateStatement(statementId!, toUpdateStatementInput(values)),
+    onSuccess: (statement) => {
+      if (user) {
+        void queryClient.invalidateQueries({
+          queryKey: ["statements", user.id],
+        });
+      }
+
+      void queryClient.invalidateQueries({
+        queryKey: ["statement", statementId],
+      });
+
+      navigate(`/statement/${statement.id}`);
+    },
+    onError: (error) => {
+      if (error instanceof UpdateStatementError) {
+        setSubmitError(error.message);
+        return;
+      }
+
+      setSubmitError("Something went wrong. Please try again.");
+    },
+  });
+
+  const mutation = isEditMode ? updateMutation : createMutation;
+  const isPending = mutation.isPending;
+
   if (!user) {
     return null;
+  }
+
+  if (isEditMode && isLoadingStatement) {
+    return <FullPageLoader />;
+  }
+
+  if (isEditMode && (isStatementError || !existingStatement)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="mx-auto max-w-3xl px-6 py-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Something went wrong</CardTitle>
+              <CardDescription>
+                {statementError instanceof Error
+                  ? statementError.message
+                  : "Unknown error"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-3">
+              <Button onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? "Retrying…" : "Try again"}
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/">Back to home</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
   }
 
   function onSubmit(values: StatementNewFormValues) {
@@ -92,7 +202,13 @@ export function StatementNewPage() {
     }
 
     setSubmitError(null);
-    mutation.mutate(toCreateStatementInput(user.id, values));
+
+    if (isEditMode) {
+      updateMutation.mutate(values);
+      return;
+    }
+
+    createMutation.mutate(toCreateStatementInput(user.id, values));
   }
 
   function handleUseSampleData() {
@@ -106,10 +222,14 @@ export function StatementNewPage() {
       <main className="mx-auto max-w-3xl px-6 py-8">
         <header className="mb-8">
           <h1 className="text-2xl font-semibold text-foreground">
-            Add a new financial statement
+            {isEditMode
+              ? "Edit financial statement"
+              : "Add a new financial statement"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Record your monthly income, essential costs, and debt commitments.
+            {isEditMode
+              ? "Update your monthly income, essential costs, and debt commitments."
+              : "Record your monthly income, essential costs, and debt commitments."}
           </p>
         </header>
 
@@ -183,17 +303,25 @@ export function StatementNewPage() {
           )}
 
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Submitting…" : "Submit statement"}
+            <Button type="submit" disabled={isPending}>
+              {isPending
+                ? isEditMode
+                  ? "Saving…"
+                  : "Submitting…"
+                : isEditMode
+                  ? "Save changes"
+                  : "Submit statement"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={mutation.isPending}
-              onClick={handleUseSampleData}
-            >
-              Use sample data
-            </Button>
+            {!isEditMode && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={handleUseSampleData}
+              >
+                Use sample data
+              </Button>
+            )}
           </div>
         </form>
       </main>

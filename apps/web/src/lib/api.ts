@@ -2,6 +2,7 @@ import {
   STATEMENT_API_ROUTES,
   type CreateStatementInput,
   type StatementWithSummary,
+  type UpdateStatementInput,
 } from "@financial-healthcheck/shared";
 
 export class CreateStatementError extends Error {
@@ -11,6 +12,16 @@ export class CreateStatementError extends Error {
   ) {
     super(message);
     this.name = "CreateStatementError";
+  }
+}
+
+export class UpdateStatementError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "UpdateStatementError";
   }
 }
 
@@ -64,6 +75,35 @@ export async function createStatement(
           : "Failed to create statement";
 
     throw new CreateStatementError(message, response.status);
+  }
+
+  return response.json() as Promise<StatementWithSummary>;
+}
+
+export async function updateStatement(
+  id: string,
+  input: UpdateStatementInput,
+): Promise<StatementWithSummary> {
+  const response = await fetch(STATEMENT_API_ROUTES.statementById(id), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    const message =
+      typeof body?.error === "string"
+        ? body.error
+        : response.status === 404
+          ? "Statement not found"
+          : response.status === 409
+            ? "A statement already exists for this month"
+            : "Failed to update statement";
+
+    throw new UpdateStatementError(message, response.status);
   }
 
   return response.json() as Promise<StatementWithSummary>;

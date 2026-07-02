@@ -77,6 +77,10 @@ describe("StatementDetailPage", () => {
     expect(screen.getByText(mockStatement.summary.repaymentGuidance)).toBeInTheDocument();
     expect(screen.getByText("Why am I seeing this?")).toBeInTheDocument();
     expect(screen.getByText(mockStatement.summary.whyAmISeeingThis)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute(
+      "href",
+      "/statement/new?statementId=stmt-1",
+    );
   });
 
   it("navigates back to the homepage", async () => {

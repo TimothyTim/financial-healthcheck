@@ -252,3 +252,119 @@ describe("GET /api/statements/:id", () => {
     expect(response.body.error).toBe("Statement not found");
   });
 });
+
+describe("PATCH /api/statements/:id", () => {
+  const app = createApp();
+
+  it("updates a statement and returns the enriched result", async () => {
+    const created = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-patch",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const updatedPayments = [
+      { type: "income", label: "Bonus", amount: { amount: 50_000 } },
+      { type: "expense", label: "Groceries", amount: { amount: 30_000 } },
+      { type: "debtRepayment", label: "Loan", amount: { amount: 5_000 } },
+    ];
+
+    const response = await request(app)
+      .patch(`/api/statements/${created.body.id}`)
+      .send({ month: 6, year: 2026, payments: updatedPayments });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: created.body.id,
+      userId: "user-patch",
+      createdAt: created.body.createdAt,
+      period: { month: 6, year: 2026 },
+      summary: {
+        totalIncome: { amount: 50_000 },
+        totalExpenses: { amount: 30_000 },
+        totalDebtRepayments: { amount: 5_000 },
+        netPosition: { amount: 15_000 },
+        status: "tight",
+      },
+    });
+    expect(response.body.payments).toHaveLength(3);
+    expect(response.body.payments[0]).toMatchObject({
+      type: "income",
+      label: "Bonus",
+    });
+    expect(response.body.updatedAt >= created.body.updatedAt).toBe(true);
+  });
+
+  it("returns 404 when the statement does not exist", async () => {
+    const response = await request(app)
+      .patch("/api/statements/non-existent-id")
+      .send({ month: 6, year: 2026, payments: samplePayments });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Statement not found");
+  });
+
+  it("returns 409 when updating to an occupied period", async () => {
+    await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-patch-dup",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const july = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-patch-dup",
+        month: 7,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const response = await request(app)
+      .patch(`/api/statements/${july.body.id}`)
+      .send({ month: 6, year: 2026, payments: samplePayments });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toContain("user-patch-dup");
+  });
+
+  it("returns 400 for invalid month", async () => {
+    const created = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-patch-invalid",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const response = await request(app)
+      .patch(`/api/statements/${created.body.id}`)
+      .send({ month: 13, year: 2026, payments: samplePayments });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when payments are missing", async () => {
+    const created = await request(app)
+      .post("/api/statements")
+      .send({
+        userId: "user-patch-no-payments",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+    const response = await request(app)
+      .patch(`/api/statements/${created.body.id}`)
+      .send({ month: 6, year: 2026 });
+
+    expect(response.status).toBe(400);
+  });
+});

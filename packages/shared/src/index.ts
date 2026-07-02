@@ -14,6 +14,7 @@ export {
 export type {
   CreatePaymentInput,
   CreateStatementInput,
+  UpdateStatementInput,
   ListStatementsQuery,
   Payment,
   PaymentType,

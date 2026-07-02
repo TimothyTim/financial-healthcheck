@@ -5,6 +5,7 @@ import type {
   Statement,
   StatementSummary,
   StatementWithSummary,
+  UpdateStatementInput,
 } from "@financial-healthcheck/shared";
 import {
   computeRepaymentGuidance,
@@ -18,6 +19,13 @@ export class DuplicateStatementError extends Error {
       `Statement already exists for user ${userId} in ${month}/${year}`,
     );
     this.name = "DuplicateStatementError";
+  }
+}
+
+export class StatementNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Statement not found: ${id}`);
+    this.name = "StatementNotFoundError";
   }
 }
 
@@ -120,7 +128,61 @@ export function createStatementsService() {
       });
   }
 
-  return { createStatement, getStatementById, listStatementsByUserId };
+  function updateStatement(
+    id: string,
+    input: UpdateStatementInput,
+  ): StatementWithSummary {
+    const statement = statements.get(id);
+
+    if (!statement) {
+      throw new StatementNotFoundError(id);
+    }
+
+    const targetKey = periodKey(statement.userId, input.month, input.year);
+    const existingId = periodIndex.get(targetKey);
+
+    if (existingId && existingId !== id) {
+      throw new DuplicateStatementError(
+        statement.userId,
+        input.month,
+        input.year,
+      );
+    }
+
+    const oldKey = periodKey(
+      statement.userId,
+      statement.period.month,
+      statement.period.year,
+    );
+
+    if (oldKey !== targetKey) {
+      periodIndex.delete(oldKey);
+      periodIndex.set(targetKey, id);
+    }
+
+    const now = new Date().toISOString();
+    const payments = input.payments.map((payment) =>
+      createPayment(id, payment, input.month, input.year, now),
+    );
+
+    const updated: Statement = {
+      ...statement,
+      period: { month: input.month, year: input.year },
+      payments,
+      updatedAt: now,
+    };
+
+    statements.set(id, updated);
+
+    return toStatementWithSummary(updated);
+  }
+
+  return {
+    createStatement,
+    getStatementById,
+    listStatementsByUserId,
+    updateStatement,
+  };
 }
 
 export const statementsService = createStatementsService();

@@ -1,3 +1,4 @@
+import type { StatementWithSummary } from "@financial-healthcheck/shared";
 import { z } from "zod";
 
 export const paymentItemSchema = z.object({
@@ -65,4 +66,27 @@ export const monthOptions = [
 
 export function getYearOptions(currentYear = new Date().getFullYear()) {
   return Array.from({ length: 6 }, (_, index) => currentYear - index);
+}
+
+export function statementToFormValues(
+  statement: StatementWithSummary,
+): StatementNewFormValues {
+  const toItem = (payment: StatementWithSummary["payments"][number]) => ({
+    label: payment.label,
+    amount: payment.amount.amount / 100,
+  });
+
+  return {
+    month: statement.period.month,
+    year: statement.period.year,
+    income: statement.payments
+      .filter((payment) => payment.type === "income")
+      .map(toItem),
+    essentialCosts: statement.payments
+      .filter((payment) => payment.type === "expense")
+      .map(toItem),
+    debtCommitments: statement.payments
+      .filter((payment) => payment.type === "debtRepayment")
+      .map(toItem),
+  };
 }

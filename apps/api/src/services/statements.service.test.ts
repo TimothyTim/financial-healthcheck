@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createStatementsService,
   DuplicateStatementError,
+  StatementNotFoundError,
 } from "./statements.service.js";
 
 const samplePayments = [
@@ -198,5 +199,215 @@ describe("statements service", () => {
     const service = createStatementsService();
 
     expect(service.getStatementById("missing-id")).toBeUndefined();
+  });
+
+  describe("updateStatement", () => {
+    it("updates payments and recalculates summary", () => {
+      const service = createStatementsService();
+
+      const created = service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      const updatedPayments = [
+        { type: "income" as const, label: "Bonus", amount: { amount: 50_000 } },
+        { type: "expense" as const, label: "Groceries", amount: { amount: 30_000 } },
+        {
+          type: "debtRepayment" as const,
+          label: "Loan",
+          amount: { amount: 5_000 },
+        },
+      ];
+
+      const result = service.updateStatement(created.id, {
+        month: 6,
+        year: 2026,
+        payments: updatedPayments,
+      });
+
+      expect(result.id).toBe(created.id);
+      expect(result.userId).toBe("user-1");
+      expect(result.createdAt).toBe(created.createdAt);
+      expect(result.updatedAt >= created.updatedAt).toBe(true);
+      expect(result.period).toEqual({ month: 6, year: 2026 });
+      expect(result.payments).toHaveLength(3);
+      expect(result.payments[0]).toMatchObject({
+        type: "income",
+        label: "Bonus",
+        amount: { amount: 50_000 },
+      });
+      expect(result.summary).toEqual({
+        totalIncome: { amount: 50_000 },
+        totalExpenses: { amount: 30_000 },
+        totalDebtRepayments: { amount: 5_000 },
+        netPosition: { amount: 15_000 },
+        status: "tight",
+        repaymentGuidance:
+          "Keep repayments steady for now; review spending before committing to higher payments.",
+        whyAmISeeingThis:
+          "Your monthly net position is £150.00 (between £100 and £299 after essentials and debt payments), so we class this as tight.",
+      });
+    });
+
+    it("changes period and updates list order", () => {
+      const service = createStatementsService();
+
+      const created = service.createStatement({
+        userId: "user-1",
+        month: 3,
+        year: 2025,
+        payments: samplePayments,
+      });
+
+      const result = service.updateStatement(created.id, {
+        month: 12,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      expect(result.period).toEqual({ month: 12, year: 2026 });
+      expect(service.getStatementById(created.id)?.period).toEqual({
+        month: 12,
+        year: 2026,
+      });
+
+      const listed = service.listStatementsByUserId("user-1");
+
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.period).toEqual({ month: 12, year: 2026 });
+    });
+
+    it("allows updating payments on the same period", () => {
+      const service = createStatementsService();
+
+      const created = service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      expect(() =>
+        service.updateStatement(created.id, {
+          month: 6,
+          year: 2026,
+          payments: [
+            { type: "income", label: "Salary", amount: { amount: 100_000 } },
+            { type: "expense", label: "Rent", amount: { amount: 40_000 } },
+            {
+              type: "debtRepayment",
+              label: "Card",
+              amount: { amount: 5_000 },
+            },
+          ],
+        }),
+      ).not.toThrow();
+    });
+
+    it("throws StatementNotFoundError for unknown id", () => {
+      const service = createStatementsService();
+
+      expect(() =>
+        service.updateStatement("missing-id", {
+          month: 6,
+          year: 2026,
+          payments: samplePayments,
+        }),
+      ).toThrow(StatementNotFoundError);
+    });
+
+    it("throws DuplicateStatementError when moving to an occupied period", () => {
+      const service = createStatementsService();
+
+      const june = service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      const july = service.createStatement({
+        userId: "user-1",
+        month: 7,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      expect(() =>
+        service.updateStatement(july.id, {
+          month: 6,
+          year: 2026,
+          payments: samplePayments,
+        }),
+      ).toThrow(DuplicateStatementError);
+
+      expect(service.getStatementById(june.id)?.period).toEqual({
+        month: 6,
+        year: 2026,
+      });
+      expect(service.getStatementById(july.id)?.period).toEqual({
+        month: 7,
+        year: 2026,
+      });
+    });
+
+    it("throws DuplicateStatementError when updating to another statement's period", () => {
+      const service = createStatementsService();
+
+      service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      const other = service.createStatement({
+        userId: "user-1",
+        month: 7,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      expect(() =>
+        service.updateStatement(other.id, {
+          month: 6,
+          year: 2026,
+          payments: samplePayments,
+        }),
+      ).toThrow(DuplicateStatementError);
+    });
+
+    it("frees the old period when moving to a free month", () => {
+      const service = createStatementsService();
+
+      const created = service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      service.updateStatement(created.id, {
+        month: 8,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      const replacement = service.createStatement({
+        userId: "user-1",
+        month: 6,
+        year: 2026,
+        payments: samplePayments,
+      });
+
+      expect(replacement.period).toEqual({ month: 6, year: 2026 });
+      expect(service.getStatementById(created.id)?.period).toEqual({
+        month: 8,
+        year: 2026,
+      });
+    });
   });
 });

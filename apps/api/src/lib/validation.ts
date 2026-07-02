@@ -10,16 +10,12 @@ const createPaymentSchema = z.object({
     .optional(),
 });
 
-export const createStatementSchema = z
-  .object({
-    userId: z.string().min(1),
-    month: z.number().int().min(1).max(12),
-    year: z.number().int().min(2000).max(2100),
-    payments: z.array(createPaymentSchema).min(1),
-  })
-  .superRefine((data, ctx) => {
+const paymentsArraySchema = z
+  .array(createPaymentSchema)
+  .min(1)
+  .superRefine((payments, ctx) => {
     for (const type of ["income", "expense", "debtRepayment"] as const) {
-      if (!data.payments.some((payment) => payment.type === type)) {
+      if (!payments.some((payment) => payment.type === type)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `At least one ${type} payment is required`,
@@ -28,6 +24,19 @@ export const createStatementSchema = z
       }
     }
   });
+
+export const createStatementSchema = z.object({
+  userId: z.string().min(1),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000).max(2100),
+  payments: paymentsArraySchema,
+});
+
+export const updateStatementSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000).max(2100),
+  payments: paymentsArraySchema,
+});
 
 export const listStatementsQuerySchema = z.object({
   userId: z.string().min(1),

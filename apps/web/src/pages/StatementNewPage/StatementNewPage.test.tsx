@@ -17,13 +17,15 @@ function seedUser() {
   );
 }
 
-function renderStatementNewPageWithRoutes() {
+function renderStatementNewPageWithRoutes(
+  initialEntry = "/statement/new",
+) {
   return renderWithProviders(
     <Routes>
       <Route path="/statement/new" element={<StatementNewPage />} />
       <Route path="/statement/:id" element={<StatementDetailPage />} />
     </Routes>,
-    { routerProps: { initialEntries: ["/statement/new"] } },
+    { routerProps: { initialEntries: [initialEntry] } },
   );
 }
 
@@ -65,6 +67,44 @@ const sampleStatementResponse = {
     whyAmISeeingThis:
       "Your monthly net position is £1,250.00 (at least £300 left after essentials and debt payments), so we class this as breathing room.",
   },
+};
+
+const editStatementResponse = {
+  id: "stmt-edit",
+  userId: "user-test",
+  period: { month: 6, year: 2026 },
+  payments: [
+    {
+      id: "pay-income",
+      statementId: "stmt-edit",
+      type: "income",
+      label: "Salary",
+      amount: { amount: 200_000 },
+      date: "2026-06-01",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    },
+    {
+      id: "pay-expense",
+      statementId: "stmt-edit",
+      type: "expense",
+      label: "Rent",
+      amount: { amount: 80_000 },
+      date: "2026-06-01",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    },
+    {
+      id: "pay-debt",
+      statementId: "stmt-edit",
+      type: "debtRepayment",
+      label: "Credit card",
+      amount: { amount: 10_000 },
+      date: "2026-06-01",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    },
+  ],
+  summary: createdStatementResponse.summary,
+  createdAt: "2026-06-01T00:00:00.000Z",
+  updatedAt: "2026-06-01T00:00:00.000Z",
 };
 
 describe("StatementNewPage", () => {
@@ -196,5 +236,198 @@ describe("StatementNewPage", () => {
         },
       ]),
     );
+  });
+
+  it("loads an existing statement in edit mode and submits a PATCH", async () => {
+    const updatedStatementResponse = {
+      ...editStatementResponse,
+      summary: {
+        ...editStatementResponse.summary,
+        totalIncome: { amount: 210_000 },
+      },
+    };
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(editStatementResponse), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(updatedStatementResponse), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(updatedStatementResponse), { status: 200 }),
+      );
+
+    const user = userEvent.setup();
+    renderStatementNewPageWithRoutes(
+      "/statement/new?statementId=stmt-edit",
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Edit financial statement" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save changes" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use sample data" }),
+    ).not.toBeInTheDocument();
+
+    expect(screen.getByDisplayValue("Salary")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("2000")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Rent")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("800")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Credit card")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("100")).toBeInTheDocument();
+
+    const incomeLabel = screen.getByDisplayValue("Salary");
+    await user.clear(incomeLabel);
+    await user.type(incomeLabel, "Salary plus bonus");
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "June 2026" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/statements/stmt-edit",
+      expect.objectContaining({
+        method: "PATCH",
+      }),
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[1]!;
+    const body = JSON.parse(String(requestInit?.body));
+
+    expect(body).toMatchObject({
+      month: 6,
+      year: 2026,
+    });
+    expect(body.payments).toEqual(
+      expect.arrayContaining([
+        {
+          type: "income",
+          label: "Salary plus bonus",
+          amount: { amount: 200_000 },
+        },
+      ]),
+    );
+  });
+
+  describe("edit mode", () => {
+    it("shows error state when the statement cannot be loaded", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(null, { status: 404 }),
+      );
+
+      renderStatementNewPageWithRoutes(
+        "/statement/new?statementId=stmt-missing",
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Statement not found")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Save changes" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows duplicate period error when PATCH returns 409", async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(editStatementResponse), { status: 200 }),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              error: "Statement already exists for user user-test in 7/2026",
+            }),
+            { status: 409 },
+          ),
+        );
+
+      const user = userEvent.setup();
+      renderStatementNewPageWithRoutes(
+        "/statement/new?statementId=stmt-edit",
+      );
+
+      await screen.findByRole("heading", { name: "Edit financial statement" });
+
+      await user.selectOptions(screen.getByLabelText("Month"), "7");
+      await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "Statement already exists for user user-test in 7/2026",
+        );
+      });
+
+      expect(
+        screen.getByRole("heading", { name: "Edit financial statement" }),
+      ).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows not found error when PATCH returns 404", async () => {
+      vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(editStatementResponse), { status: 200 }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+      const user = userEvent.setup();
+      renderStatementNewPageWithRoutes(
+        "/statement/new?statementId=stmt-edit",
+      );
+
+      await screen.findByRole("heading", { name: "Edit financial statement" });
+      await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "Statement not found",
+        );
+      });
+
+      expect(
+        screen.getByRole("heading", { name: "Edit financial statement" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "June 2026" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows generic error when PATCH fails with an unexpected status", async () => {
+      vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(editStatementResponse), { status: 200 }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+      const user = userEvent.setup();
+      renderStatementNewPageWithRoutes(
+        "/statement/new?statementId=stmt-edit",
+      );
+
+      await screen.findByRole("heading", { name: "Edit financial statement" });
+      await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "Failed to update statement",
+        );
+      });
+
+      expect(
+        screen.getByRole("heading", { name: "Edit financial statement" }),
+      ).toBeInTheDocument();
+    });
   });
 });

@@ -67,6 +67,13 @@ export interface CreateStatementInput {
   payments: CreatePaymentInput[];
 }
 
+/** Request body for updating an existing statement. */
+export interface UpdateStatementInput {
+  month: number;
+  year: number;
+  payments: CreatePaymentInput[];
+}
+
 /** Query parameters for listing statements for a user. */
 export interface ListStatementsQuery {
   userId: string;
